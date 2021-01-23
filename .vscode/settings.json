@@ -1,0 +1,10 @@
+{
+    "python.pythonPath": "C:\\Users\\gygy2\\.virtualenvs\\stock_alarm_telegram_bot-F4VEB7cj\\Scripts\\python.exe",
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true,
+    "python.formatting.provider": "black",
+    "python.linting.flake8Args": [
+        "--max-line-lenght-88"
+    ]
+}
