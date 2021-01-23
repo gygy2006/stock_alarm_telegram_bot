@@ -7,7 +7,7 @@ from collections import Counter
 from PyQt5.QtWidgets import *
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
-from holiday_calculator import count_holiday, today
+from holiday_calculator import count_holiday, today, holiday_is_valid, next_day
 
 TR_REQ_TIME_INTERVAL = 1.5
 SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
@@ -207,44 +207,37 @@ class Kiwoom(QAxWidget):
                 self.next_day_comparison = {
                     "명일": NEXT_DAY,
                     "명일고가": "",
+                    "명일고가등락률": "",
                     "명일저가": "",
                     "명일시가": "",
                     "명일종가": "",
-                    "명일등락률": "",
-                    "명일등락액": "",
+                    "명일전일대비등락률": percent,
                     "당일": date,
                     "당일고가": high_price,
                     "당일저가": low_price,
                     "당일시가": start_price,
                     "당일종가": end_price,
-                    "전일대비등락률": percent,
-                    "당일등락액": int(end_price.replace("+", "").replace("-", ""))
-                    - int(start_price.replace("+", "").replace("-", "")),
+                    "당일전일대비등락률": percent,
                 }
                 break
             elif i == 0:
                 self.next_day_comparison = {
                     "명일": date,
                     "명일고가": high_price,
+                    "명일고가등락률": "",
                     "명일저가": low_price,
                     "명일시가": start_price,
                     "명일종가": end_price,
-                    "명일등락률": percent,
-                    "명일등락액": int(end_price.replace("+", "").replace("-", ""))
-                    - int(start_price.replace("+", "").replace("-", "")),
+                    "명일전일대비등락률": percent,
                 }
             else:
                 self.next_day_comparison["당일"] = date
                 self.next_day_comparison["당일고가"] = high_price
+                self.next_day_comparison["당일고가등락률"] = high_price
                 self.next_day_comparison["당일저가"] = low_price
                 self.next_day_comparison["당일시가"] = start_price
                 self.next_day_comparison["당일종가"] = end_price
-                self.next_day_comparison["전일대비등락률"] = percent
-                self.next_day_comparison["당일등락액"] = int(
-                    end_price.replace("+", "").replace("-", "")
-                ) - int(start_price.replace("+", "").replace("-", ""))
-
-            print(self.next_day_comparison)
+                self.next_day_comparison["당일전일대비등락률"] = percent
 
 
 def request_opt90009(next):  # 외인, 기관 매수종목
@@ -276,7 +269,6 @@ def request_opt10061(kiwoom, data, index):
 def request_opt10086(kiwoom, data, index):
     kiwoom.set_input_value("종목코드", data["종목코드"])
     kiwoom.set_input_value("조회일자", NEXT_DAY)
-    print(NEXT_DAY)
     kiwoom.set_input_value("표시구분", 1)
     kiwoom.comm_rq_data("opt10086_req", "opt10086", 0, "0101")
     comprehensive_data = kiwoom.comprehensive_data[index]
@@ -289,57 +281,58 @@ if __name__ == "__main__":
     kiwoom = Kiwoom()
     kiwoom.comm_connect()
 
-    for i in range(30):
-        TODAY = (datetime.today() - timedelta(days=i)).strftime("%Y%m%d")
-        NEXT_DAY = (datetime.today() - timedelta(days=i) + timedelta(days=1)).strftime(
-            "%Y%m%d"
-        )
+    for i in range(10):
+        TODAY = (datetime(2021, 1, 5) - timedelta(days=i)).strftime("%Y%m%d")
+        print(TODAY)
+        NEXT_DAY = next_day(TODAY).strftime("%Y%m%d")
         request_opt90009(0)  # 외인, 기관 매수종목
-        for index, data in enumerate(kiwoom.purchases_foreign_institution_box):
-            print(
-                f"Loading {index+1} ... {len(kiwoom.purchases_foreign_institution_box)}"
+        if kiwoom.purchases_foreign_institution_box:
+            for index, data in enumerate(kiwoom.purchases_foreign_institution_box):
+                print(
+                    f"Loading {index+1} ... {len(kiwoom.purchases_foreign_institution_box)}"
+                )
+                request_opt10061(kiwoom, data, index)  # 해당일자부터 5일전까지 외인 , 기관 매수액
+                request_opt10086(kiwoom, data, index)
+                """while kiwoom.remained_data == True:  # 연속조회가 필요한 경우
+                    print("연속 조회 중...")
+                    time.sleep(TR_REQ_TIME_INTERVAL)
+                    request_opt90009(2)  # 외인, 기관 매수종목"""
+
+            foreign_institution_dataframe = pd.DataFrame(
+                kiwoom.purchases_foreign_institution_box,
+                columns=["종목코드", "종목명", "외인순매수금액", "외인순매수수량", "기관순매수금액", "기관순매수수량"],
             )
-            request_opt10061(kiwoom, data, index)  # 해당일자부터 5일전까지 외인 , 기관 매수액
-            request_opt10086(kiwoom, data, index)
-            """while kiwoom.remained_data == True:  # 연속조회가 필요한 경우
-                print("연속 조회 중...")
-                time.sleep(TR_REQ_TIME_INTERVAL)
-                request_opt90009(2)  # 외인, 기관 매수종목"""
+            comprehensive_dataframe = pd.DataFrame(
+                kiwoom.comprehensive_data,
+                columns=[
+                    "종목코드",
+                    "종목명",
+                    "개인",
+                    "외국인",
+                    "기관",
+                    "일일외인순매수",
+                    "일일기관순매수",
+                    "명일",
+                    "명일고가",
+                    "명일고가등락률",
+                    "명일저가",
+                    "명일시가",
+                    "명일종가",
+                    "명일전일대비등락률",
+                    "당일",
+                    "당일고가",
+                    "당일고가등락률" "당일시가",
+                    "당일저가",
+                    "당일종가",
+                    "당일전일대비등락률",
+                ],
+            )
 
-        foreign_institution_dataframe = pd.DataFrame(
-            kiwoom.purchases_foreign_institution_box,
-            columns=["종목코드", "종목명", "외인순매수금액", "외인순매수수량", "기관순매수금액", "기관순매수수량"],
-        )
-        comprehensive_dataframe = pd.DataFrame(
-            kiwoom.comprehensive_data,
-            columns=[
-                "종목코드",
-                "종목명",
-                "개인",
-                "외국인",
-                "기관",
-                "일일외인순매수",
-                "일일기관순매수",
-                "명일",
-                "명일고가",
-                "명일저가",
-                "명일시가",
-                "명일종가",
-                "명일등락률",
-                "명일등락액",
-                "당일",
-                "당일고가",
-                "당일시가",
-                "당일저가",
-                "당일종가",
-                "전일대비등락률",
-                "당일등락액",
-            ],
-        )
+            foreign_institution_dataframe.to_sql(TODAY, SQLITE, if_exists="replace")
+            comprehensive_dataframe.to_sql(
+                f"total_{TODAY}", SQLITE, if_exists="replace"
+            )
 
-        foreign_institution_dataframe.to_sql(TODAY, SQLITE, if_exists="replace")
-        comprehensive_dataframe.to_sql(f"total_{TODAY}", SQLITE, if_exists="replace")
-
-        kiwoom.comprehensive_data = []
-        kiwoom.purchases_foreign_institution_box = []
-        kiwoom.next_day_comparison = []
+            kiwoom.comprehensive_data = []
+            kiwoom.purchases_foreign_institution_box = []
+            kiwoom.next_day_comparison = []
