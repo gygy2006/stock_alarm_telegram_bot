@@ -19,18 +19,11 @@ from holiday_calculator import (
 TR_REQ_TIME_INTERVAL = 1.7
 SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
 
+global TODAY
+TODAY = stock_today(datetime.today())
 
-def DAY(i=0):
-    return datetime.today() - timedelta(days=i)
-
-
-def TODAY(i=0):
-    return DAY(i).strftime("%Y%m%d")
-
-
-def NEXT_DAY(i=0):
-    day = DAY(i) + timedelta(days=1)
-    return day.strftime("%Y%m%d")
+global NEXT_DAY
+NEXT_DAY = next_day(TODAY)
 
 
 class Kiwoom(QAxWidget):
@@ -38,7 +31,7 @@ class Kiwoom(QAxWidget):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
-        self.purchases_foreign_institution_box = []
+        self.foreign_institution_purchases_data = []
         self.comprehensive_data = []
 
     def _create_kiwoom_instance(self):
@@ -179,7 +172,7 @@ class Kiwoom(QAxWidget):
         for foreign_data in foreign_data_list:
             for institution_data in institution_data_list:
                 if foreign_data["종목명"] == institution_data["종목명"]:
-                    self.purchases_foreign_institution_box.append(
+                    self.foreign_institution_purchases_data.append(
                         {
                             **foreign_data,
                             "기관순매수금액": institution_data["기관순매수금액"],
@@ -294,16 +287,19 @@ def request_opt10061(kiwoom, data, index):
         "시작일자",
         (
             is_datetime_conversion(TODAY)
+            - timedelta(days=count_holiday(TODAY))  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
             - timedelta(days=5)
-            - timedelta(days=count_holiday())
         ).strftime("%Y%m%d"),
     )
     kiwoom.set_input_value("종료일자", TODAY)
     kiwoom.set_input_value("금액수량구분", "1")
     kiwoom.set_input_value("매매구분", "0")
     kiwoom.set_input_value("단위구분", "1000")
+
     time.sleep(TR_REQ_TIME_INTERVAL)
+
     kiwoom.comm_rq_data("opt10061_req", "opt10061", 0, "0101")
+
     comprehensive_data = kiwoom.comprehensive_data[index]
     comprehensive_data["종목코드"] = data["종목코드"]
     comprehensive_data["종목명"] = data["종목명"]
@@ -316,26 +312,24 @@ def request_opt10086(kiwoom, data, index):
     kiwoom.set_input_value("조회일자", NEXT_DAY)
     kiwoom.set_input_value("표시구분", 1)
     kiwoom.comm_rq_data("opt10086_req", "opt10086", 0, "0101")
+
     comprehensive_data = kiwoom.comprehensive_data[index]
     next_day_comparison = kiwoom.next_day_comparison
     comprehensive_data.update(next_day_comparison)
 
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    kiwoom = Kiwoom()
-    kiwoom.comm_connect()
-
-    for i in range(4):
+def main(iterations):
+    for i in range(iterations):
+        global TODAY
+        global NEXT_DAY
         TODAY = (stock_today(datetime.today()) - timedelta(days=i)).strftime("%Y%m%d")
-        print(TODAY)
         NEXT_DAY = next_day(TODAY).strftime("%Y%m%d")
+        print(TODAY)
         request_opt90009(0)  # 외인, 기관 매수종목
-        if kiwoom.purchases_foreign_institution_box:
-            for index, data in enumerate(kiwoom.purchases_foreign_institution_box):
-                print(
-                    f"Loading {index+1} ... {len(kiwoom.purchases_foreign_institution_box)}"
-                )
+        foreign_ins_purchase = kiwoom.foreign_institution_purchases_data
+        if foreign_ins_purchase:
+            for index, data in enumerate(foreign_ins_purchase):
+                print(f"Loading {index+1} ... {len(foreign_ins_purchase)}")
                 request_opt10061(kiwoom, data, index)  # 해당일자부터 5일전까지 외인 , 기관 매수액
                 request_opt10086(kiwoom, data, index)
                 """while kiwoom.remained_data == True:  # 연속조회가 필요한 경우
@@ -344,7 +338,7 @@ if __name__ == "__main__":
                     request_opt90009(2)  # 외인, 기관 매수종목"""
 
             foreign_institution_dataframe = pd.DataFrame(
-                kiwoom.purchases_foreign_institution_box,
+                foreign_ins_purchase,
                 columns=["종목코드", "종목명", "외인순매수금액", "외인순매수수량", "기관순매수금액", "기관순매수수량"],
             )
             comprehensive_dataframe = pd.DataFrame(
@@ -380,5 +374,12 @@ if __name__ == "__main__":
             )
 
             kiwoom.comprehensive_data = []
-            kiwoom.purchases_foreign_institution_box = []
+            foreign_ins_purchase = []
             kiwoom.next_day_comparison = []
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    kiwoom = Kiwoom()
+    kiwoom.comm_connect()
+    main(4)

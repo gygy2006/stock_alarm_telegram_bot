@@ -62,11 +62,11 @@ def stock_today(date):
 
 
 # 현재일자 부터 5일 전 까지 공휴일 , 주말 구분하여 카운팅해줌
-def count_holiday():
+def count_holiday(date):
     day_calculator = []
     holidays = stock_holiday()
     for i in range(5):  # range 값을 바꿔서 일자 조절가능
-        day = datetime.today() + timedelta(days=-i)  # format : datetime
+        day = date + timedelta(days=-i)  # format : datetime
         if holiday_is_valid(day):
             day_calculator.append(True)
         else:
