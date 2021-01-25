@@ -2,14 +2,21 @@ import sys
 import pandas as pd
 import time
 import sqlite3
+import threading
 from datetime import datetime, timedelta
 from collections import Counter
 from PyQt5.QtWidgets import *
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
-from holiday_calculator import count_holiday, today, holiday_is_valid, next_day
+from holiday_calculator import (
+    count_holiday,
+    stock_today,
+    holiday_is_valid,
+    next_day,
+    is_datetime_conversion,
+)
 
-TR_REQ_TIME_INTERVAL = 1.5
+TR_REQ_TIME_INTERVAL = 1.7
 SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
 
 
@@ -198,22 +205,42 @@ class Kiwoom(QAxWidget):
         self.next_day_comparison = {}
         for i in range(2):  # 당일과 명일 데이터만 받아옴
             date = self._comm_get_data(trcode, "", rqname, i, "날짜")
-            high_price = self._comm_get_data(trcode, "", rqname, i, "고가")
-            start_price = self._comm_get_data(trcode, "", rqname, i, "시가")
-            low_price = self._comm_get_data(trcode, "", rqname, i, "저가")
-            end_price = self._comm_get_data(trcode, "", rqname, i, "종가")
+            high_price = int(
+                self._comm_get_data(trcode, "", rqname, i, "고가")
+                .replace("+", "")
+                .replace("-", "")
+            )
+            start_price = int(
+                self._comm_get_data(trcode, "", rqname, i, "시가")
+                .replace("+", "")
+                .replace("-", "")
+            )
+            low_price = int(
+                self._comm_get_data(trcode, "", rqname, i, "저가")
+                .replace("+", "")
+                .replace("-", "")
+            )
+            end_price = int(
+                self._comm_get_data(trcode, "", rqname, i, "종가")
+                .replace("+", "")
+                .replace("-", "")
+            )
             percent = self._comm_get_data(trcode, "", rqname, i, "등락률")
             if i == 0 and date == TODAY:
                 self.next_day_comparison = {
                     "명일": NEXT_DAY,
                     "명일고가": "",
                     "명일고가등락률": "",
+                    "전일종가대비명일고가등락률": "",
                     "명일저가": "",
                     "명일시가": "",
                     "명일종가": "",
-                    "명일전일대비등락률": percent,
+                    "명일전일대비등락률": "",
                     "당일": date,
                     "당일고가": high_price,
+                    "당일고가등락률": round(
+                        ((high_price - start_price) / start_price) * 100, 2
+                    ),
                     "당일저가": low_price,
                     "당일시가": start_price,
                     "당일종가": end_price,
@@ -224,16 +251,27 @@ class Kiwoom(QAxWidget):
                 self.next_day_comparison = {
                     "명일": date,
                     "명일고가": high_price,
-                    "명일고가등락률": "",
+                    "명일고가등락률": round(
+                        ((high_price - start_price) / start_price) * 100, 2
+                    ),
+                    "전일종가대비명일고가등락률": "",
                     "명일저가": low_price,
                     "명일시가": start_price,
                     "명일종가": end_price,
                     "명일전일대비등락률": percent,
                 }
             else:
+                if self.next_day_comparison["명일고가"]:
+                    self.next_day_comparison["전일종가대비명일고가등락률"] = round(
+                        ((self.next_day_comparison["명일고가"] - end_price) / end_price)
+                        * 100,
+                        2,
+                    )
                 self.next_day_comparison["당일"] = date
                 self.next_day_comparison["당일고가"] = high_price
-                self.next_day_comparison["당일고가등락률"] = high_price
+                self.next_day_comparison["당일고가등락률"] = round(
+                    ((high_price - start_price) / start_price) * 100, 2
+                )
                 self.next_day_comparison["당일저가"] = low_price
                 self.next_day_comparison["당일시가"] = start_price
                 self.next_day_comparison["당일종가"] = end_price
@@ -252,7 +290,14 @@ def request_opt90009(next):  # 외인, 기관 매수종목
 # 해당일자부터 5일전까지 외인 , 기관 매수액
 def request_opt10061(kiwoom, data, index):
     kiwoom.set_input_value("종목코드", data["종목코드"])
-    kiwoom.set_input_value("시작일자", str(int(TODAY) - 5 - count_holiday()))
+    kiwoom.set_input_value(
+        "시작일자",
+        (
+            is_datetime_conversion(TODAY)
+            - timedelta(days=5)
+            - timedelta(days=count_holiday())
+        ).strftime("%Y%m%d"),
+    )
     kiwoom.set_input_value("종료일자", TODAY)
     kiwoom.set_input_value("금액수량구분", "1")
     kiwoom.set_input_value("매매구분", "0")
@@ -281,8 +326,8 @@ if __name__ == "__main__":
     kiwoom = Kiwoom()
     kiwoom.comm_connect()
 
-    for i in range(10):
-        TODAY = (datetime(2021, 1, 5) - timedelta(days=i)).strftime("%Y%m%d")
+    for i in range(4):
+        TODAY = (stock_today(datetime.today()) - timedelta(days=i)).strftime("%Y%m%d")
         print(TODAY)
         NEXT_DAY = next_day(TODAY).strftime("%Y%m%d")
         request_opt90009(0)  # 외인, 기관 매수종목
@@ -312,6 +357,13 @@ if __name__ == "__main__":
                     "기관",
                     "일일외인순매수",
                     "일일기관순매수",
+                    "당일",
+                    "당일고가",
+                    "당일고가등락률",
+                    "당일시가",
+                    "당일저가",
+                    "당일종가",
+                    "당일전일대비등락률",
                     "명일",
                     "명일고가",
                     "명일고가등락률",
@@ -319,12 +371,6 @@ if __name__ == "__main__":
                     "명일시가",
                     "명일종가",
                     "명일전일대비등락률",
-                    "당일",
-                    "당일고가",
-                    "당일고가등락률" "당일시가",
-                    "당일저가",
-                    "당일종가",
-                    "당일전일대비등락률",
                 ],
             )
 

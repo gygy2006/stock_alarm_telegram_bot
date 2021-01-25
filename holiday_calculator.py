@@ -19,15 +19,11 @@ def stock_holiday():
     return holidays
 
 
-def today():
-    return datetime.today()
-
-
 def year():
     return datetime.today().year
 
 
-def date_conversion(date):
+def is_datetime_conversion(date):
     if not isinstance(date, datetime):
         year = date[:4]
         month = date[4:6]
@@ -41,7 +37,7 @@ def date_conversion(date):
 
 
 def holiday_is_valid(date):
-    date = date_conversion(date)
+    date = is_datetime_conversion(date)
     if date.weekday() > 4 or stock_closed_day_is_valid(date):
         return True
 
@@ -53,9 +49,15 @@ def stock_closed_day_is_valid(date):
 
 
 def next_day(date):
-    date = date_conversion(date) + timedelta(days=1)
+    date = is_datetime_conversion(date) + timedelta(days=1)
     while holiday_is_valid(date):
         date += timedelta(days=1)
+    return date
+
+
+def stock_today(date):
+    while holiday_is_valid(date):
+        date += timedelta(days=-1)
     return date
 
 
@@ -64,7 +66,7 @@ def count_holiday():
     day_calculator = []
     holidays = stock_holiday()
     for i in range(5):  # range 값을 바꿔서 일자 조절가능
-        day = today() + timedelta(days=-i)  # format : datetime
+        day = datetime.today() + timedelta(days=-i)  # format : datetime
         if holiday_is_valid(day):
             day_calculator.append(True)
         else:
