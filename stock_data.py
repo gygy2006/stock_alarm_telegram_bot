@@ -287,7 +287,9 @@ def request_opt10061(kiwoom, data, index):
         "시작일자",
         (
             is_datetime_conversion(TODAY)
-            - timedelta(days=count_holiday(TODAY))  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
+            - timedelta(
+                days=count_holiday(is_datetime_conversion(TODAY))
+            )  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
             - timedelta(days=5)
         ).strftime("%Y%m%d"),
     )
