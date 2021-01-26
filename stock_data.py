@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import sqlite3
 import threading
+import pymysql
 from datetime import datetime, timedelta
 from collections import Counter
 from PyQt5.QtWidgets import *
@@ -16,7 +17,7 @@ from holiday_calculator import (
     is_datetime_conversion,
 )
 
-TR_REQ_TIME_INTERVAL = 1.7
+TR_REQ_TIME_INTERVAL = 1.25
 SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
 
 global TODAY
@@ -287,9 +288,7 @@ def request_opt10061(kiwoom, data, index):
         "시작일자",
         (
             is_datetime_conversion(TODAY)
-            - timedelta(
-                days=count_holiday(is_datetime_conversion(TODAY))
-            )  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
+            - timedelta(days=count_holiday(TODAY))  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
             - timedelta(days=5)
         ).strftime("%Y%m%d"),
     )
@@ -327,9 +326,10 @@ def main(iterations):
         TODAY = (stock_today(datetime.today()) - timedelta(days=i)).strftime("%Y%m%d")
         NEXT_DAY = next_day(TODAY).strftime("%Y%m%d")
         print(TODAY)
+        time.sleep(0.25)
         request_opt90009(0)  # 외인, 기관 매수종목
         foreign_ins_purchase = kiwoom.foreign_institution_purchases_data
-        if foreign_ins_purchase:
+        if foreign_ins_purchase and not holiday_is_valid(TODAY):
             for index, data in enumerate(foreign_ins_purchase):
                 print(f"Loading {index+1} ... {len(foreign_ins_purchase)}")
                 request_opt10061(kiwoom, data, index)  # 해당일자부터 5일전까지 외인 , 기관 매수액
@@ -374,14 +374,15 @@ def main(iterations):
             comprehensive_dataframe.to_sql(
                 f"total_{TODAY}", SQLITE, if_exists="replace"
             )
-
             kiwoom.comprehensive_data = []
-            foreign_ins_purchase = []
+            kiwoom.foreign_institution_purchases_data = []
             kiwoom.next_day_comparison = []
+    time.sleep(60)
+    main(2)
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     kiwoom = Kiwoom()
     kiwoom.comm_connect()
-    main(4)
+    main(2)

@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "C:\\Users\\gygy2\\.virtualenvs\\stock_alarm_telegram_bot-F4VEB7cj\\Scripts\\python.exe",
+    "python.pythonPath": "C:\\Users\\gygy2\\Anaconda3\\envs\\stock_alarm_bot\\python.exe",
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
     "python.linting.enabled": true,
