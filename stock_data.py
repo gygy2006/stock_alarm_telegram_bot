@@ -4,6 +4,7 @@ import time
 import sqlite3
 import threading
 import pymysql
+from sqlalchemy import create_engine
 from datetime import datetime, timedelta
 from collections import Counter
 from PyQt5.QtWidgets import *
@@ -11,20 +12,24 @@ from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 from holiday_calculator import (
     count_holiday,
-    stock_today,
     holiday_is_valid,
     next_day,
     is_datetime_conversion,
 )
 
-TR_REQ_TIME_INTERVAL = 1.25
-SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
+pymysql.install_as_MySQLdb()
+import MySQLdb
 
-global TODAY
-TODAY = stock_today(datetime.today())
+# 3.6
+TR_REQ_TIME_INTERVAL = 1
+# SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
 
-global NEXT_DAY
-NEXT_DAY = next_day(TODAY)
+
+def today(date, i=1):
+    date = is_datetime_conversion(date)
+    while holiday_is_valid(date):
+        date = date + timedelta(days=-i)
+    return date
 
 
 class Kiwoom(QAxWidget):
@@ -220,9 +225,9 @@ class Kiwoom(QAxWidget):
                 .replace("-", "")
             )
             percent = self._comm_get_data(trcode, "", rqname, i, "등락률")
-            if i == 0 and date == TODAY:
+            if i == 0 and date == datetime.today().strftime("%Y%m%d"):
                 self.next_day_comparison = {
-                    "명일": NEXT_DAY,
+                    "명일": "",
                     "명일고가": "",
                     "명일고가등락률": "",
                     "전일종가대비명일고가등락률": "",
@@ -278,6 +283,7 @@ def request_opt90009(next):  # 외인, 기관 매수종목
     kiwoom.set_input_value("금액수량구분", "1")
     kiwoom.set_input_value("조회일자구분", "1")
     kiwoom.set_input_value("날짜", TODAY)
+    time.sleep(TR_REQ_TIME_INTERVAL)
     kiwoom.comm_rq_data("opt90009_req", "opt90009", next, "0101")
 
 
@@ -312,6 +318,7 @@ def request_opt10086(kiwoom, data, index):
     kiwoom.set_input_value("종목코드", data["종목코드"])
     kiwoom.set_input_value("조회일자", NEXT_DAY)
     kiwoom.set_input_value("표시구분", 1)
+    time.sleep(TR_REQ_TIME_INTERVAL)
     kiwoom.comm_rq_data("opt10086_req", "opt10086", 0, "0101")
 
     comprehensive_data = kiwoom.comprehensive_data[index]
@@ -319,14 +326,28 @@ def request_opt10086(kiwoom, data, index):
     comprehensive_data.update(next_day_comparison)
 
 
+def engine(table_name):
+    engine = create_engine(
+        "mysql+mysqldb://user:" + "As731585!" + f"@localhost/{table_name}",
+        encoding="utf-8",
+    )
+    conn = engine.connect()
+    return engine
+
+
 def main(iterations):
     for i in range(iterations):
         global TODAY
         global NEXT_DAY
-        TODAY = (stock_today(datetime.today()) - timedelta(days=i)).strftime("%Y%m%d")
+        TODAY = (datetime.today() - timedelta(days=i)).strftime("%Y%m%d")
+        # TODAY = (datetime(2019, 7, 15) - timedelta(days=i)).strftime("%Y%m%d")
+        while holiday_is_valid(TODAY):
+            TODAY = (is_datetime_conversion(TODAY) - timedelta(days=1)).strftime(
+                "%Y%m%d"
+            )
         NEXT_DAY = next_day(TODAY).strftime("%Y%m%d")
         print(TODAY)
-        time.sleep(0.25)
+        time.sleep(0.1)
         request_opt90009(0)  # 외인, 기관 매수종목
         foreign_ins_purchase = kiwoom.foreign_institution_purchases_data
         if foreign_ins_purchase and not holiday_is_valid(TODAY):
@@ -370,18 +391,27 @@ def main(iterations):
                 ],
             )
 
-            foreign_institution_dataframe.to_sql(TODAY, SQLITE, if_exists="replace")
+            # foreign_institution_dataframe.to_sql(TODAY, SQLITE, if_exists="replace")
+            # comprehensive_dataframe.to_sql(
+            #     f"total_{TODAY}", SQLITE, if_exists="replace"
+            # )
+            foreign_institution_dataframe.to_sql(
+                name=TODAY, con=engine("foreign_ins_items"), if_exists="replace"
+            )
             comprehensive_dataframe.to_sql(
-                f"total_{TODAY}", SQLITE, if_exists="replace"
+                name=TODAY, con=engine("foreign_ins_purchases"), if_exists="replace"
             )
             kiwoom.comprehensive_data = []
             kiwoom.foreign_institution_purchases_data = []
             kiwoom.next_day_comparison = []
-    time.sleep(60)
-    main(2)
 
 
 if __name__ == "__main__":
+    global TODAY
+    TODAY = today(datetime.today())
+    global NEXT_DAY
+    NEXT_DAY = next_day(TODAY)
+
     app = QApplication(sys.argv)
     kiwoom = Kiwoom()
     kiwoom.comm_connect()
