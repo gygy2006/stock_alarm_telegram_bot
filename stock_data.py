@@ -32,13 +32,21 @@ def today(date, i=1):
     return date
 
 
-class Kiwoom(QAxWidget):
+class Calculator:
+    def fluctuation_cal(self, standard_price, price):
+        result = round(((price - standard_price) / standard_price) * 100, 2)
+        return result
+
+
+class Kiwoom(QAxWidget, Calculator):
     def __init__(self):
         super().__init__()
         self._create_kiwoom_instance()
         self._set_signal_slots()
         self.foreign_institution_purchases_data = []
         self.comprehensive_data = []
+        self.new_stock_data_sw = True
+        self.on_excel_sw = False
 
     def _create_kiwoom_instance(self):
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
@@ -201,80 +209,100 @@ class Kiwoom(QAxWidget):
         )
 
     def _opt10086(self, rqname, trcode):
+        data_cnt = self._get_repeat_cnt(trcode, rqname)
+
         self.next_day_comparison = {}
-        for i in range(2):  # 당일과 명일 데이터만 받아옴
-            date = self._comm_get_data(trcode, "", rqname, i, "날짜")
-            high_price = int(
-                self._comm_get_data(trcode, "", rqname, i, "고가")
-                .replace("+", "")
-                .replace("-", "")
-            )
-            start_price = int(
-                self._comm_get_data(trcode, "", rqname, i, "시가")
-                .replace("+", "")
-                .replace("-", "")
-            )
-            low_price = int(
-                self._comm_get_data(trcode, "", rqname, i, "저가")
-                .replace("+", "")
-                .replace("-", "")
-            )
-            end_price = int(
-                self._comm_get_data(trcode, "", rqname, i, "종가")
-                .replace("+", "")
-                .replace("-", "")
-            )
-            percent = self._comm_get_data(trcode, "", rqname, i, "등락률")
-            if i == 0 and date == datetime.today().strftime("%Y%m%d"):
-                self.next_day_comparison = {
-                    "명일": "",
-                    "명일고가": "",
-                    "명일고가등락률": "",
-                    "전일종가대비명일고가등락률": "",
-                    "명일저가": "",
-                    "명일시가": "",
-                    "명일종가": "",
-                    "명일전일대비등락률": "",
-                    "당일": date,
-                    "당일고가": high_price,
-                    "당일고가등락률": round(
-                        ((high_price - start_price) / start_price) * 100, 2
-                    ),
-                    "당일저가": low_price,
-                    "당일시가": start_price,
-                    "당일종가": end_price,
-                    "당일전일대비등락률": percent,
-                }
-                break
-            elif i == 0:
-                self.next_day_comparison = {
-                    "명일": date,
-                    "명일고가": high_price,
-                    "명일고가등락률": round(
-                        ((high_price - start_price) / start_price) * 100, 2
-                    ),
-                    "전일종가대비명일고가등락률": "",
-                    "명일저가": low_price,
-                    "명일시가": start_price,
-                    "명일종가": end_price,
-                    "명일전일대비등락률": percent,
-                }
-            else:
-                if self.next_day_comparison["명일고가"]:
-                    self.next_day_comparison["전일종가대비명일고가등락률"] = round(
-                        ((self.next_day_comparison["명일고가"] - end_price) / end_price)
-                        * 100,
-                        2,
-                    )
-                self.next_day_comparison["당일"] = date
-                self.next_day_comparison["당일고가"] = high_price
-                self.next_day_comparison["당일고가등락률"] = round(
-                    ((high_price - start_price) / start_price) * 100, 2
+        self.excel_assist_data = []
+
+        if self.on_excel_sw:
+            for i in range(data_cnt):
+                date = self._comm_get_data(trcode, "", rqname, i, "날짜")
+
+                high_price = int(
+                    self._comm_get_data(trcode, "", rqname, i, "고가")
+                    .replace("+", "")
+                    .replace("-", "")
                 )
-                self.next_day_comparison["당일저가"] = low_price
-                self.next_day_comparison["당일시가"] = start_price
-                self.next_day_comparison["당일종가"] = end_price
-                self.next_day_comparison["당일전일대비등락률"] = percent
+
+                self.excel_assist_data.append(
+                    {"날짜": date, "고가": high_price,}
+                )
+        else:
+            for i in range(2):  # 당일과 명일 데이터만 받아옴
+                date = self._comm_get_data(trcode, "", rqname, i, "날짜")
+                high_price = int(
+                    self._comm_get_data(trcode, "", rqname, i, "고가")
+                    .replace("+", "")
+                    .replace("-", "")
+                )
+                start_price = int(
+                    self._comm_get_data(trcode, "", rqname, i, "시가")
+                    .replace("+", "")
+                    .replace("-", "")
+                )
+                low_price = int(
+                    self._comm_get_data(trcode, "", rqname, i, "저가")
+                    .replace("+", "")
+                    .replace("-", "")
+                )
+                end_price = int(
+                    self._comm_get_data(trcode, "", rqname, i, "종가")
+                    .replace("+", "")
+                    .replace("-", "")
+                )
+                percent = self._comm_get_data(trcode, "", rqname, i, "등락률")
+
+                if (
+                    i == 0
+                    and date == datetime.today().strftime("%Y%m%d")
+                    and self.new_stock_data_sw
+                ):
+                    self.next_day_comparison = {
+                        "명일": "",
+                        "명일고가": "",
+                        "명일고가등락률": "",
+                        "전일종가대비명일고가등락률": "",
+                        "명일저가": "",
+                        "명일시가": "",
+                        "명일종가": "",
+                        "명일전일대비등락률": "",
+                        "당일": date,
+                        "당일고가": high_price,
+                        "당일고가등락률": self.fluctuation_cal(start_price, high_price),
+                        "당일저가": low_price,
+                        "당일시가": start_price,
+                        "당일종가": end_price,
+                        "당일전일대비등락률": percent,
+                    }
+                    break
+                elif i == 0:
+                    self.next_day_comparison = {
+                        "명일": date,
+                        "명일고가": high_price,
+                        "명일고가등락률": self.fluctuation_cal(start_price, high_price),
+                        "전일종가대비명일고가등락률": "",
+                        "명일저가": low_price,
+                        "명일시가": start_price,
+                        "명일종가": end_price,
+                        "명일전일대비등락률": percent,
+                    }
+                elif i == 1:
+                    if self.next_day_comparison["명일고가"]:
+                        self.next_day_comparison[
+                            "전일종가대비명일고가등락률"
+                        ] = self.fluctuation_cal(
+                            end_price, self.next_day_comparison["명일고가"]
+                        )
+
+                    self.next_day_comparison["당일"] = date
+                    self.next_day_comparison["당일고가"] = high_price
+                    self.next_day_comparison["당일고가등락률"] = self.fluctuation_cal(
+                        start_price, high_price
+                    )
+                    self.next_day_comparison["당일저가"] = low_price
+                    self.next_day_comparison["당일시가"] = start_price
+                    self.next_day_comparison["당일종가"] = end_price
+                    self.next_day_comparison["당일전일대비등락률"] = percent
 
 
 def request_opt90009(next):  # 외인, 기관 매수종목
@@ -324,6 +352,7 @@ def request_opt10086(kiwoom, data, index):
     comprehensive_data = kiwoom.comprehensive_data[index]
     next_day_comparison = kiwoom.next_day_comparison
     comprehensive_data.update(next_day_comparison)
+    print(next_day_comparison)
 
 
 def engine(table_name):
@@ -404,6 +433,8 @@ def main(iterations):
             kiwoom.comprehensive_data = []
             kiwoom.foreign_institution_purchases_data = []
             kiwoom.next_day_comparison = []
+            if TODAY == datetime.today().strftime("%Y%m%d"):
+                kiwoom.new_stock_data_sw = False
 
 
 if __name__ == "__main__":

@@ -11,8 +11,8 @@ from stock_data import Kiwoom
 from openpyxl import load_workbook
 
 
-# today = datetime(2020, 10, 14).strftime("%Y%m%d")
-today = datetime.today().strftime("%Y%m%d")
+today = datetime(2020, 10, 14).strftime("%Y%m%d")
+# today = datetime.today().strftime("%Y%m%d")
 excel_row = 1
 data_box = []
 cleaned_data = []
@@ -126,7 +126,7 @@ def is_db_validate():
         return result_set
 
 
-def start_price_constrast_fluc_calculator(check_prcie, standard_price):
+def start_price_constrast_fluc_calculator(standard_price, check_prcie):
     result = round(((check_prcie - standard_price) / standard_price) * 100, 2,)
     return result
 
@@ -141,242 +141,234 @@ def time_minus(first, second):
     return result
 
 
-while int(today) >= 20190328:
-
-    today = (is_datetime_conversion(today) - timedelta(days=1)).strftime("%Y%m%d")
-    result_set = is_db_validate()
-    sub_day = (is_datetime_conversion(today) + timedelta(days=1)).strftime("%Y%m%d")
-    three_percent_day = ""
-    nine_percent_day = ""
-    three_percent_price = ""
-    nine_percent_price = ""
-
-    for row in result_set:
-        name = row[2]
-        print(name, today)
-        code = row[1]
-        next_day = row[15]
-        next_day_start_price = row[19]
-        next_day_end_price = row[16]
-        next_day_rate_3fluctuation = row[17]
-        next_day_rate_9fluctuation = 0
+def is_fluctuation_validate(rate_3fluctuation=None):
+    if rate_3fluctuation:
         if (
-            # data["당일전일대비등락률"][0] == "-"and
-            "KODEX" not in name
-            and "TIGER 200" not in name
+            fluctuation >= 3
+            and rate_3fluctuation <= 3
+            and int(data_today) >= int(next_day)
+            or second_fluctuation >= 3
+            and rate_3fluctuation <= 3
+            and int(data_today) >= int(next_day)
         ):
-            if isinstance(row[17], str):
-                next_day_rate_3fluctuation = 0
-            if next_day_rate_3fluctuation >= 9:
-                next_day_rate_9fluctuation = next_day_rate_3fluctuation
-            elif next_day_rate_3fluctuation < 3:
-                while (
-                    next_day_rate_3fluctuation < 3
-                    and next_day_rate_9fluctuation < 9
-                    or int(datetime.today().strftime("%Y%m%d")) > int(sub_day)
-                ):
-                    kiwoom.set_input_value("종목코드", code)
-                    kiwoom.set_input_value("조회일자", sub_day)
-                    kiwoom.set_input_value("표시구분", 1)
-                    time.sleep(3.6)
-                    kiwoom.comm_rq_data("opt10086_req", "opt10086", 0, "0101")
-                    if (
-                        is_datetime_conversion(sub_day) < datetime.today()
-                        and next_day_start_price
+            return True
+    else:
+        if (
+            fluctuation >= 9
+            and int(data_today) >= int(next_day)
+            or second_fluctuation >= 9
+            and int(data_today) >= int(next_day)
+        ):
+            return True
+    return False
+
+
+def get_rate_fluctuation(rate_fluctuation):
+    if fluctuation >= rate_fluctuation:
+        return fluctuation
+    else:
+        return second_fluctuation
+
+
+def get_rate_fluctuation_day(rate_fluctuation):
+    if fluctuation >= rate_fluctuation:
+        return data_today
+    else:
+        data_nextday
+
+
+def get_rate_fluctuation_price(rate_fluctuation):
+    if fluctuation >= rate_fluctuation:
+        return data_today_high_price
+    else:
+        return data_nextday_high_price
+
+
+if __name__ == "__main__":
+    while int(today) >= 20190328:
+
+        today = (is_datetime_conversion(today) - timedelta(days=1)).strftime("%Y%m%d")
+        result_set = is_db_validate()
+        sub_day = (is_datetime_conversion(today) + timedelta(days=1)).strftime("%Y%m%d")
+        three_percent_day = ""
+        nine_percent_day = ""
+        three_percent_price = ""
+        nine_percent_price = ""
+
+        for row in result_set:
+            name = row[2]
+            print(name, today)
+            code = row[1]
+            next_day = row[15]
+            next_day_start_price = row[19]
+            next_day_end_price = row[16]
+            rate_3fluctuation = row[17]
+            rate_9fluctuation = 0
+            if "KODEX" not in name and "TIGER 200" not in name:
+                if isinstance(rate_3fluctuation, str):
+                    rate_3fluctuation = 0
+                if rate_3fluctuation >= 9:
+                    rate_9fluctuation = rate_3fluctuation
+                elif rate_3fluctuation < 3:
+                    while (
+                        rate_3fluctuation < 3
+                        and rate_9fluctuation < 9
+                        or int(datetime.today().strftime("%Y%m%d")) > int(sub_day)
                     ):
-                        data = kiwoom.next_day_comparison
-
-                        data_today = data["당일"]
-                        data_nextday = data["명일"] if data["명일"] else ""
-                        data_today_high_price = data["당일고가"]
-                        data_nextday_high_price = data["명일고가"] if data["명일고가"] else ""
-
-                        # 등락률
-                        fluctuation = start_price_constrast_fluc_calculator(
-                            data_today_high_price, next_day_start_price
-                        )
-
-                        if data_nextday_high_price:
-                            # 등락률
-                            second_fluctuation = start_price_constrast_fluc_calculator(
-                                data_nextday_high_price, next_day_start_price
-                            )
-                        if (  # 3% 확인
-                            fluctuation >= 3
-                            and next_day_rate_3fluctuation <= 3
-                            and int(data_today) >= int(next_day)
-                            or second_fluctuation >= 3
-                            and next_day_rate_3fluctuation <= 3
-                            and int(data_today) >= int(next_day)
-                        ):
-
-                            next_day_rate_3fluctuation = (
-                                fluctuation if fluctuation >= 3 else second_fluctuation
-                            )
-                            three_percent_day = (
-                                data_today if fluctuation >= 3 else data_nextday
-                            )
-                            three_percent_price = (
-                                data_today_high_price
-                                if fluctuation >= 3
-                                else data_nextday_high_price
-                            )
-                        print("--------------------3percent check----------------")
-                        print(
-                            f"data_today : {data_today} 고가 : {data_today_high_price} data_nextday : {data_nextday} 고가 : {data_nextday_high_price} name : {name}  next_day_rate_3fluctuation :{next_day_rate_3fluctuation} fluctuation : {fluctuation} second_fluctuation: {second_fluctuation}"
-                        )
-                        print("--------------------3percent check----------------")
-                        if (  # 9% 확인
-                            fluctuation >= 9
-                            # and next_day_rate_3fluctuation >= 9
-                            and int(data_today) >= int(next_day)
-                            or second_fluctuation >= 9
-                            # and next_day_rate_3fluctuation >= 9
-                            and int(data_today) >= int(next_day)
-                        ):
-                            next_day_rate_9fluctuation = (
-                                fluctuation if fluctuation >= 9 else second_fluctuation
-                            )
-                            nine_percent_day = (
-                                data_today if fluctuation >= 9 else data_nextday
-                            )
-                            nine_percent_price = (
-                                data_today_high_price
-                                if fluctuation >= 9
-                                else data_nextday_high_price
-                            )
-                        print("--------------------9percent check----------------")
-                        print(
-                            f"next_day_rate_9fluctuation : {next_day_rate_9fluctuation} nine_percent_day:{nine_percent_day} nine_percent_price : {nine_percent_price}"
-                        )
-                        print("--------------------9percent check----------------")
+                        kiwoom.set_input_value("종목코드", code)
+                        kiwoom.set_input_value("조회일자", sub_day)
+                        kiwoom.set_input_value("표시구분", 1)
+                        time.sleep(3.6)
+                        kiwoom.comm_rq_data("opt10086_req", "opt10086", 0, "0101")
                         if (
-                            next_day_rate_3fluctuation >= 3
-                            and next_day_rate_9fluctuation >= 9
+                            is_datetime_conversion(sub_day) < datetime.today()
+                            and next_day_start_price
                         ):
-                            print("-----------------break--------------")
-                            print(
-                                f"name : {name} next_day_rate_3fluctuation : {next_day_rate_3fluctuation} next_day_rate_9fluctuation: {next_day_rate_9fluctuation}"
+                            data = kiwoom.next_day_comparison
+                            kiwoom.on_excel_sw = True
+                            print(kiwoom.excel_assist_data)
+                            data_today = data["당일"]
+                            data_nextday = data["명일"] if data["명일"] else ""
+                            data_today_high_price = data["당일고가"]
+                            data_nextday_high_price = (
+                                data["명일고가"] if data["명일고가"] else ""
                             )
-                            print("-----------------break--------------")
-                            break  # 3% 등락률 9% 등락률을 다 충족했을 시 break
-                    sub_day = (
-                        is_datetime_conversion(sub_day) + timedelta(days=2)
-                    ).strftime("%Y%m%d")
 
-                    if int(sub_day) >= int(datetime.today().strftime("%Y%m%d")):
+                            # 등락률
+                            fluctuation = start_price_constrast_fluc_calculator(
+                                next_day_start_price, data_today_high_price
+                            )
+
+                            # 등락률
+                            if data_nextday_high_price:
+                                second_fluctuation = start_price_constrast_fluc_calculator(
+                                    next_day_start_price, data_nextday_high_price
+                                )
+                                # 3% 확인
+                            if is_fluctuation_validate(rate_3fluctuation):
+
+                                rate_3fluctuation = get_rate_fluctuation(3)
+                                three_percent_day = get_rate_fluctuation_day(3)
+                                three_percent_price = get_rate_fluctuation_price(9)
+                                print(
+                                    "--------------------3percent check----------------"
+                                )
+                                print(
+                                    f"data_today : {data_today} 고가 : {data_today_high_price} data_nextday : {data_nextday} 고가 : {data_nextday_high_price} name : {name}  rate_3fluctuation :{rate_3fluctuation} fluctuation : {fluctuation} second_fluctuation: {second_fluctuation}"
+                                )
+                                print(
+                                    "--------------------3percent check----------------"
+                                )
+                            # 9% 확인
+                            if is_fluctuation_validate():
+                                rate_9fluctuation = get_rate_fluctuation(9)
+                                nine_percent_day = get_rate_fluctuation_day(9)
+                                nine_percent_price = get_rate_fluctuation_price(9)
+                                print(
+                                    "--------------------9percent check----------------"
+                                )
+                                print(
+                                    f"rate_9fluctuation : {rate_9fluctuation} nine_percent_day:{nine_percent_day} nine_percent_price : {nine_percent_price}"
+                                )
+                                print(
+                                    "--------------------9percent check----------------"
+                                )
+                            if rate_3fluctuation >= 3 and rate_9fluctuation >= 9:
+                                print("-----------------break--------------")
+                                print(
+                                    f"name : {name} rate_3fluctuation : {rate_3fluctuation} rate_9fluctuation: {rate_9fluctuation}"
+                                )
+                                print("-----------------break--------------")
+                                break  # 3% 등락률 9% 등락률을 다 충족했을 시 break
                         sub_day = (
-                            is_datetime_conversion(today) + timedelta(days=1)
+                            is_datetime_conversion(sub_day) + timedelta(days=2)
                         ).strftime("%Y%m%d")
-                        break
 
-            data_box = [
-                {
-                    "날짜": today,
-                    "종목": name,
-                    "일일외인순매수": int(row[6]),
-                    "일일기관순매수": int(row[7]),
-                    "일일외인기관순매수": int(row[6]) + int(row[7]),
-                    "당일시가": row[11],
-                    "당일전일대비등락률": row[14],
-                    "명일전일대비등락률": row[-1],
-                    "명일고가등락률": row[17],
-                    "명일": next_day,
-                    "명일시가": next_day_start_price,
-                    "up3%날짜": three_percent_day if three_percent_day else next_day,
-                    "up3%걸린시간": time_minus(three_percent_day, next_day)
-                    if three_percent_day
-                    else 0
-                    if next_day_rate_3fluctuation >= 3
-                    else "",
-                    "up3%perscent": next_day_rate_3fluctuation
-                    if next_day_rate_3fluctuation >= 3
-                    else "",
-                    "up3%price": str(three_percent_price)
-                    if three_percent_price
-                    else str(next_day_end_price)
-                    if next_day_rate_3fluctuation >= 3
-                    else "",
-                    "up9%날짜": str(nine_percent_day),
-                    "up9%걸린시간": time_minus(nine_percent_day, next_day)
-                    if nine_percent_day
-                    else 0
-                    if next_day_rate_3fluctuation >= 9
-                    else "",
-                    "up9%percent": next_day_rate_9fluctuation
-                    if next_day_rate_9fluctuation
-                    else next_day_rate_3fluctuation
-                    if next_day_rate_3fluctuation >= 9
-                    else "",
-                    "up9%price": nine_percent_price if nine_percent_price else "",
-                }
-            ]
+                        if int(sub_day) >= int(datetime.today().strftime("%Y%m%d")):
+                            sub_day = (
+                                is_datetime_conversion(today) + timedelta(days=1)
+                            ).strftime("%Y%m%d")
+                            break
 
-            df = pd.DataFrame(
-                data_box,
-                columns=[
-                    "날짜",
-                    "종목",
-                    "일일외인순매수",
-                    "일일기관순매수",
-                    "일일외인기관순매수",
-                    "당일시가",
-                    "당일전일대비등락률",
-                    "명일전일대비등락률",
-                    "명일고가등락률",
-                    "명일",
-                    "명일시가",
-                    "up3%날짜",
-                    "up3%걸린시간",
-                    "up3%perscent",
-                    "up3%price",
-                    "up9%날짜",
-                    "up9%걸린시간",
-                    "up9%percent",
-                    "up9%price",
-                ],
-            )
-            append_df_to_excel(
-                "./기록용/real.xlsx",
-                df,
-                "Sheet1",
-                startrow=excel_row,
-                truncate_sheet=False,
-                header=None,
-            )
-            print(excel_row)
-            excel_row += 1
+                data_box = [
+                    {
+                        "날짜": today,
+                        "종목": name,
+                        "일일외인순매수": int(row[6]),
+                        "일일기관순매수": int(row[7]),
+                        "일일외인기관순매수": int(row[6]) + int(row[7]),
+                        "당일시가": row[11],
+                        "당일전일대비등락률": row[14],
+                        "명일전일대비등락률": row[-1],
+                        "명일고가등락률": row[17],
+                        "명일": next_day,
+                        "명일시가": next_day_start_price,
+                        "up3%날짜": three_percent_day if three_percent_day else next_day,
+                        "up3%걸린시간": time_minus(three_percent_day, next_day)
+                        if three_percent_day
+                        else 0
+                        if rate_3fluctuation >= 3
+                        else "",
+                        "up3%perscent": rate_3fluctuation
+                        if rate_3fluctuation >= 3
+                        else "",
+                        "up3%price": str(three_percent_price)
+                        if three_percent_price
+                        else str(next_day_end_price)
+                        if rate_3fluctuation >= 3
+                        else "",
+                        "up9%날짜": str(nine_percent_day),
+                        "up9%걸린시간": time_minus(nine_percent_day, next_day)
+                        if nine_percent_day
+                        else 0
+                        if rate_3fluctuation >= 9
+                        else "",
+                        "up9%percent": rate_9fluctuation
+                        if rate_9fluctuation
+                        else rate_3fluctuation
+                        if rate_3fluctuation >= 9
+                        else "",
+                        "up9%price": nine_percent_price if nine_percent_price else "",
+                    }
+                ]
 
-            three_percent_day = ""
-            nine_percent_day = ""
-            three_percent_price = ""
-            nine_percent_price = ""
-# df = pd.DataFrame(
-#     data_box,
-#     columns=[
-#         "날짜",
-#         "종목",
-#         "일일외인순매수",
-#         "일일기관순매수",
-#         "일일외인기관순매수",
-#         "당일시가",
-#         "당일전일대비등락률",
-#         "명일전일대비등락률",
-#         "명일고가등락률",
-#         "명일",
-#         "명일시가",
-#         "up3%날짜",
-#         "up3%걸린시간",
-#         "up3%perscent",
-#         "up3%price",
-#         "up9%날짜",
-#         "up9%걸린시간",
-#         "up9%percent",
-#         "up9%price",
-#     ],
-# )
+                df = pd.DataFrame(
+                    data_box,
+                    columns=[
+                        "날짜",
+                        "종목",
+                        "일일외인순매수",
+                        "일일기관순매수",
+                        "일일외인기관순매수",
+                        "당일시가",
+                        "당일전일대비등락률",
+                        "명일전일대비등락률",
+                        "명일고가등락률",
+                        "명일",
+                        "명일시가",
+                        "up3%날짜",
+                        "up3%걸린시간",
+                        "up3%perscent",
+                        "up3%price",
+                        "up9%날짜",
+                        "up9%걸린시간",
+                        "up9%percent",
+                        "up9%price",
+                    ],
+                )
+                append_df_to_excel(
+                    "./기록용/test.xlsx",
+                    df,
+                    "Sheet1",
+                    startrow=excel_row,
+                    truncate_sheet=False,
+                    header=None,
+                )
+                print(excel_row)
+                excel_row += 1
 
-# df.to_excel(
-#     excel_writer=f"./기록용/{datetime.today().strftime('%Y%m%d')+'~'+today}.xlsx"
-# )  # 엑셀로 저장
+                three_percent_day = ""
+                nine_percent_day = ""
+                three_percent_price = ""
+                nine_percent_price = ""
 
