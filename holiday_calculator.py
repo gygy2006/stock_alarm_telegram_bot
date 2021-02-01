@@ -61,19 +61,24 @@ def stock_today(date):
     return date
 
 
-# 현재일자 부터 5일 전 까지 공휴일 , 주말 구분하여 카운팅해줌
-def count_holiday(date):
+# 전,후 일자 부터 지정일 전후 까지 공휴일 , 주말 구분하여 카운팅해줌
+def count_holiday(date, range_day, down_range=True):
     date = is_datetime_conversion(date)
     day_calculator = []
     holidays = stock_holiday()
-    for i in range(5):  # range 값을 바꿔서 일자 조절가능
-        day = date + timedelta(days=-i)  # format : datetime
+    for i in range(1, range_day + 1):  # range 값을 바꿔서 일자 조절가능
+        if down_range:
+            day = date + timedelta(days=-i)  # format : datetime
+        else:
+            day = date + timedelta(days=i)
+            # print(f"{date} + {i} = {day}")
         if holiday_is_valid(day):
             day_calculator.append(True)
         else:
             day_calculator.append(False)
     weekday_number_of_time = day_calculator.count(True)
-    if day.weekday() == 6:  # for 문 마지막 요일이 일요일 이었을 경우
-        weekday_number_of_time += 1
+    if down_range:
+        if day.weekday() == 6:  # for 문 마지막 요일이 일요일 이었을 경우
+            weekday_number_of_time += 1
 
     return weekday_number_of_time

@@ -6,12 +6,17 @@ from PyQt5.QtWidgets import *
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 from datetime import datetime, timedelta
-from holiday_calculator import is_datetime_conversion, holiday_is_valid, next_day
+from holiday_calculator import (
+    is_datetime_conversion,
+    holiday_is_valid,
+    next_day,
+    count_holiday,
+)
 from stock_data import Kiwoom
 from openpyxl import load_workbook
 
 
-today = datetime(2020, 10, 14).strftime("%Y%m%d")
+today = datetime(2020, 11, 1).strftime("%Y%m%d")
 # today = datetime.today().strftime("%Y%m%d")
 excel_row = 1
 data_box = []
@@ -189,27 +194,46 @@ if __name__ == "__main__":
 
         today = (is_datetime_conversion(today) - timedelta(days=1)).strftime("%Y%m%d")
         result_set = is_db_validate()
-        sub_day = (is_datetime_conversion(today) + timedelta(days=1)).strftime("%Y%m%d")
+        sub_day = today
+        print("--------------------")
+        print(sub_day)
+        count_sub_day = count_holiday(sub_day, 19, False)
+        sub_day = is_datetime_conversion(sub_day) + timedelta(days=19)
+        while count_sub_day:
+            temp_count_sub_day = count_sub_day
+            count_sub_day = count_holiday(sub_day, count_sub_day, False)
+            sub_day = is_datetime_conversion(sub_day) + timedelta(
+                days=temp_count_sub_day
+            )
+        print(sub_day)
+        print("--------------------")
         three_percent_day = ""
         nine_percent_day = ""
         three_percent_price = ""
         nine_percent_price = ""
 
         for row in result_set:
-            name = row[2]
+            (
+                name,
+                code,
+                next_day,
+                next_day_start_price,
+                next_day_end_price,
+                rate_3fluctuation,
+                rate_9fluctuation,
+            ) = (row[2], row[1], row[15], row[19], row[16], row[17], 0)
             print(name, today)
-            code = row[1]
-            next_day = row[15]
-            next_day_start_price = row[19]
-            next_day_end_price = row[16]
-            rate_3fluctuation = row[17]
-            rate_9fluctuation = 0
+
             if "KODEX" not in name and "TIGER 200" not in name:
                 if isinstance(rate_3fluctuation, str):
                     rate_3fluctuation = 0
                 if rate_3fluctuation >= 9:
                     rate_9fluctuation = rate_3fluctuation
-                elif rate_3fluctuation < 3:
+                elif (
+                    rate_3fluctuation < 3
+                    and is_datetime_conversion(sub_day) < datetime.today()
+                    and next_day_start_price
+                ):
                     while (
                         rate_3fluctuation < 3
                         and rate_9fluctuation < 9
@@ -220,13 +244,11 @@ if __name__ == "__main__":
                         kiwoom.set_input_value("표시구분", 1)
                         time.sleep(3.6)
                         kiwoom.comm_rq_data("opt10086_req", "opt10086", 0, "0101")
-                        if (
-                            is_datetime_conversion(sub_day) < datetime.today()
-                            and next_day_start_price
-                        ):
-                            data = kiwoom.next_day_comparison
-                            kiwoom.on_excel_sw = True
-                            print(kiwoom.excel_assist_data)
+                        kiwoom.on_excel_sw = True
+
+                        datas = kiwoom.excel_assist_data
+                        print(datas)
+                        for data in datas:
                             data_today = data["당일"]
                             data_nextday = data["명일"] if data["명일"] else ""
                             data_today_high_price = data["당일고가"]
