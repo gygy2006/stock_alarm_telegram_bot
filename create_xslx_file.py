@@ -11,8 +11,8 @@ from stock_data import Kiwoom
 from openpyxl import load_workbook
 
 
-today = datetime(2020, 10, 14).strftime("%Y%m%d")
-# today = datetime.today().strftime("%Y%m%d")
+# today = datetime(2020, 10, 14).strftime("%Y%m%d")
+today = datetime.today().strftime("%Y%m%d")
 excel_row = 1
 data_box = []
 cleaned_data = []
@@ -135,7 +135,9 @@ def time_minus(first, second):
     first = is_datetime_conversion(first)
     second = is_datetime_conversion(second)
     result = first - second
+    print("---------------time minus-------------------")
     print(result, type(result))
+    print("---------------time minus-------------------")
     return result
 
 
@@ -168,9 +170,11 @@ while int(today) >= 20190328:
             if next_day_rate_3fluctuation >= 9:
                 next_day_rate_9fluctuation = next_day_rate_3fluctuation
             elif next_day_rate_3fluctuation < 3:
-                while next_day_rate_3fluctuation < 3 and int(
-                    datetime.today().strftime("%Y%m%d")
-                ) > int(sub_day):
+                while (
+                    next_day_rate_3fluctuation < 3
+                    and next_day_rate_9fluctuation < 9
+                    or int(datetime.today().strftime("%Y%m%d")) > int(sub_day)
+                ):
                     kiwoom.set_input_value("종목코드", code)
                     kiwoom.set_input_value("조회일자", sub_day)
                     kiwoom.set_input_value("표시구분", 1)
@@ -217,15 +221,17 @@ while int(today) >= 20190328:
                                 if fluctuation >= 3
                                 else data_nextday_high_price
                             )
+                        print("--------------------3percent check----------------")
                         print(
                             f"data_today : {data_today} 고가 : {data_today_high_price} data_nextday : {data_nextday} 고가 : {data_nextday_high_price} name : {name}  next_day_rate_3fluctuation :{next_day_rate_3fluctuation} fluctuation : {fluctuation} second_fluctuation: {second_fluctuation}"
                         )
+                        print("--------------------3percent check----------------")
                         if (  # 9% 확인
                             fluctuation >= 9
-                            and next_day_rate_3fluctuation <= 9
+                            # and next_day_rate_3fluctuation >= 9
                             and int(data_today) >= int(next_day)
                             or second_fluctuation >= 9
-                            and next_day_rate_3fluctuation <= 9
+                            # and next_day_rate_3fluctuation >= 9
                             and int(data_today) >= int(next_day)
                         ):
                             next_day_rate_9fluctuation = (
@@ -239,13 +245,20 @@ while int(today) >= 20190328:
                                 if fluctuation >= 9
                                 else data_nextday_high_price
                             )
+                        print("--------------------9percent check----------------")
+                        print(
+                            f"next_day_rate_9fluctuation : {next_day_rate_9fluctuation} nine_percent_day:{nine_percent_day} nine_percent_price : {nine_percent_price}"
+                        )
+                        print("--------------------9percent check----------------")
                         if (
                             next_day_rate_3fluctuation >= 3
                             and next_day_rate_9fluctuation >= 9
                         ):
+                            print("-----------------break--------------")
                             print(
-                                f"next_day_rate_3fluctuation : {next_day_rate_3fluctuation} next_day_rate_9fluctuation: {next_day_rate_9fluctuation}"
+                                f"name : {name} next_day_rate_3fluctuation : {next_day_rate_3fluctuation} next_day_rate_9fluctuation: {next_day_rate_9fluctuation}"
                             )
+                            print("-----------------break--------------")
                             break  # 3% 등락률 9% 등락률을 다 충족했을 시 break
                     sub_day = (
                         is_datetime_conversion(sub_day) + timedelta(days=2)
@@ -256,6 +269,7 @@ while int(today) >= 20190328:
                             is_datetime_conversion(today) + timedelta(days=1)
                         ).strftime("%Y%m%d")
                         break
+
             data_box = [
                 {
                     "날짜": today,
@@ -270,10 +284,9 @@ while int(today) >= 20190328:
                     "명일": next_day,
                     "명일시가": next_day_start_price,
                     "up3%날짜": three_percent_day if three_percent_day else next_day,
-                    "up3%걸린시간": is_datetime_conversion(three_percent_day)
-                    - is_datetime_conversion(next_day)
+                    "up3%걸린시간": time_minus(three_percent_day, next_day)
                     if three_percent_day
-                    else "0"
+                    else 0
                     if next_day_rate_3fluctuation >= 3
                     else "",
                     "up3%perscent": next_day_rate_3fluctuation
@@ -285,13 +298,14 @@ while int(today) >= 20190328:
                     if next_day_rate_3fluctuation >= 3
                     else "",
                     "up9%날짜": str(nine_percent_day),
-                    "up9%걸린시간": is_datetime_conversion(nine_percent_day)
-                    - is_datetime_conversion(next_day)
+                    "up9%걸린시간": time_minus(nine_percent_day, next_day)
                     if nine_percent_day
-                    else "0"
+                    else 0
                     if next_day_rate_3fluctuation >= 9
                     else "",
-                    "up9%percent": next_day_rate_3fluctuation
+                    "up9%percent": next_day_rate_9fluctuation
+                    if next_day_rate_9fluctuation
+                    else next_day_rate_3fluctuation
                     if next_day_rate_3fluctuation >= 9
                     else "",
                     "up9%price": nine_percent_price if nine_percent_price else "",
@@ -323,7 +337,7 @@ while int(today) >= 20190328:
                 ],
             )
             append_df_to_excel(
-                "./기록용/t.xlsx",
+                "./기록용/real.xlsx",
                 df,
                 "Sheet1",
                 startrow=excel_row,
@@ -333,6 +347,10 @@ while int(today) >= 20190328:
             print(excel_row)
             excel_row += 1
 
+            three_percent_day = ""
+            nine_percent_day = ""
+            three_percent_price = ""
+            nine_percent_price = ""
 # df = pd.DataFrame(
 #     data_box,
 #     columns=[
