@@ -15,21 +15,23 @@ from holiday_calculator import (
     holiday_is_valid,
     next_day,
     is_datetime_conversion,
+    recent_data_is_valid,
 )
 
 pymysql.install_as_MySQLdb()
 import MySQLdb
 
 # 3.6
-TR_REQ_TIME_INTERVAL = 1
+TR_REQ_TIME_INTERVAL = 0.5
 # SQLITE = sqlite3.connect("c:/1.python_project/stock_alarm_telegram_bot/sqlite3.db")
 
 
 def today(date, i=1):
     date = is_datetime_conversion(date)
-    while holiday_is_valid(date):
+    while holiday_is_valid(date):  # 휴장일일 경우 아닌날을 구해줌
         date = date + timedelta(days=-i)
-    return date
+
+    return date + timedelta(days=1)
 
 
 class Calculator:
@@ -45,7 +47,6 @@ class Kiwoom(QAxWidget, Calculator):
         self._set_signal_slots()
         self.foreign_institution_purchases_data = []
         self.comprehensive_data = []
-        self.new_stock_data_sw = True
         self.on_excel_sw = False
 
     def _create_kiwoom_instance(self):
@@ -252,11 +253,10 @@ class Kiwoom(QAxWidget, Calculator):
                 )
                 percent = self._comm_get_data(trcode, "", rqname, i, "등락률")
 
-                if (
-                    i == 0
-                    and date == datetime.today().strftime("%Y%m%d")
-                    and self.new_stock_data_sw
-                ):
+                if i == 0 and recent_data_is_valid().strftime("%Y%m%d") == date:
+                    print(
+                        f"date : {date} , recent_data_is_Valid : {recent_data_is_valid().strftime('%Y%m%d')} today : {self.today}"
+                    )
                     self.next_day_comparison = {
                         "명일": "",
                         "명일고가": "",
@@ -322,7 +322,7 @@ def request_opt10061(kiwoom, data, index):
         "시작일자",
         (
             is_datetime_conversion(TODAY)
-            - timedelta(days=count_holiday(TODAY , 4))  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
+            - timedelta(days=count_holiday(TODAY, 4))  # 휴장일에 걸렸을 경우 그만큼 더 가산해줌
             - timedelta(days=5)
         ).strftime("%Y%m%d"),
     )
@@ -352,7 +352,6 @@ def request_opt10086(kiwoom, data, index):
     comprehensive_data = kiwoom.comprehensive_data[index]
     next_day_comparison = kiwoom.next_day_comparison
     comprehensive_data.update(next_day_comparison)
-    print(next_day_comparison)
 
 
 def engine(table_name):
@@ -368,14 +367,15 @@ def main(iterations):
     for i in range(iterations):
         global TODAY
         global NEXT_DAY
-        TODAY = (datetime.today() - timedelta(days=i)).strftime("%Y%m%d")
-        # TODAY = (datetime(2019, 7, 15) - timedelta(days=i)).strftime("%Y%m%d")
+        TODAY = (is_datetime_conversion(TODAY) - timedelta(days=1)).strftime("%Y%m%d")
+        # TODAY = (datetime(2019, 3, 22) - timedelta(days=i)).strftime("%Y%m%d")
         while holiday_is_valid(TODAY):
             TODAY = (is_datetime_conversion(TODAY) - timedelta(days=1)).strftime(
                 "%Y%m%d"
             )
         NEXT_DAY = next_day(TODAY).strftime("%Y%m%d")
         print(TODAY)
+        kiwoom.today = TODAY
         time.sleep(0.1)
         request_opt90009(0)  # 외인, 기관 매수종목
         foreign_ins_purchase = kiwoom.foreign_institution_purchases_data
@@ -433,8 +433,6 @@ def main(iterations):
             kiwoom.comprehensive_data = []
             kiwoom.foreign_institution_purchases_data = []
             kiwoom.next_day_comparison = []
-            if TODAY == datetime.today().strftime("%Y%m%d"):
-                kiwoom.new_stock_data_sw = False
 
 
 if __name__ == "__main__":

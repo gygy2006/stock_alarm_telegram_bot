@@ -50,15 +50,24 @@ def stock_closed_day_is_valid(date):
 
 def next_day(date):
     date = is_datetime_conversion(date) + timedelta(days=1)
-    while holiday_is_valid(date):
+    while holiday_is_valid(date):  # 다음날이 휴장일일경우 휴장일이 아닌 미래의 날을 next day 로 지정
         date += timedelta(days=1)
     return date
 
 
 def stock_today(date):
+    date = is_datetime_conversion(date)
     while holiday_is_valid(date):
         date += timedelta(days=-1)
     return date
+
+
+def recent_data_is_valid():
+    today = datetime.today()
+    if holiday_is_valid(today):
+        result = stock_today(today)
+        return result
+    return False
 
 
 # 전,후 일자 부터 지정일 전후 까지 공휴일 , 주말 구분하여 카운팅해줌
